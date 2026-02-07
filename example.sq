@@ -1,0 +1,52 @@
+# Squared (^2) Example
+
+# 1. Variables and Primitives
+var[a] = int[10]
+var[b] = int[20]
+print(fstr[Sum: {eval(var[a] + var[b]).result}])
+
+# 2. Random Numbers
+var[rnd] = fint[{random(int[1], int[100])}]
+print(fstr[Random Number: {rnd}])
+
+# 3. Objects
+func[createPerson()]
+    var[p] = obj[prop[name]=str[Alice], prop[age]=int[25]]
+    return p
+
+var[person] = createPerson()
+print(fstr[Person: {person.name}, Age: {person.age}])
+
+# 4. Arrays
+var[list] = a[str[Apple], str[Banana], str[Cherry]]
+print(fstr[First fruit: {var[list].val.0}])
+print(fstr[All fruits: {var[list]}])
+
+# 5. Dynamic Object
+var[dyn] = fobj[obj[prop[val]=fint[{random(int[1], int[50])}]]]
+print(fstr[Dynamic Value: {dyn.val}])
+
+# 6. Control Flow
+print(str[--- Loops & Ifs ---])
+
+# If Statement
+var[x] = int[10]
+if[var[x] > int[5]]
+    print(str[x is greater than 5])
+else
+    print(str[x is small])
+
+# While Loop
+var[count] = int[3]
+while[var[count] > int[0]]
+    print(fstr[Countdown: {var[count]}])
+    var[count] = var[count] - int[1]
+
+# For Loop with Break/Continue
+print(str[For Loop (skip 2, break at 4):])
+for[var[i]=int[0], var[i] < int[10], var[i] = var[i] + int[1]]
+    if[var[i] == int[2]]
+        continue
+    if[var[i] == int[4]]
+        break
+    print(fstr[Index: {var[i]}])

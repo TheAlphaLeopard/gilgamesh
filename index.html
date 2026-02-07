@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Squared (^2) Language</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-dark: #1e1e1e;
+            --bg-darker: #121212;
+            --accent: #FFB74D; /* Peachish Yellow Orange */
+            --text: #e0e0e0;
+            --border: #333;
+            --code-bg: #252526;
+            --console-bg: #1e1e1e;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-darker);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+        }
+
+        header {
+            padding: 0.8rem 1rem;
+            background-color: var(--bg-dark);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        h1 { font-size: 1.1rem; font-weight: 600; }
+        h1 span { color: var(--accent); font-weight: 300; }
+
+        .controls { display: flex; gap: 8px; }
+
+        button {
+            background-color: #333;
+            color: white;
+            border: 1px solid #444;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        button:hover { background-color: #444; border-color: #555; }
+
+        button#run-btn {
+            background-color: var(--accent);
+            color: #000;
+            border: none;
+            font-weight: bold;
+        }
+        button#run-btn:hover { filter: brightness(1.1); }
+
+        main { flex: 1; display: flex; overflow: hidden; }
+
+        .editor-pane, .output-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            min-width: 0;
+        }
+
+        .output-pane { border-right: none; background-color: var(--console-bg); }
+
+        .pane-header {
+            background-color: #2d2d2d;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .textarea-wrapper { flex: 1; position: relative; background-color: var(--code-bg); overflow: hidden; }
+
+        .editor-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        textarea, pre {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 1rem;
+            border: none;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            box-sizing: border-box;
+            background: transparent;
+            overflow: auto;
+        }
+
+        textarea {
+            color: transparent;
+            caret-color: #e0e0e0;
+            z-index: 1;
+            resize: none;
+            outline: none;
+        }
+
+        pre {
+            z-index: 0;
+            pointer-events: none;
+            color: #d4d4d4;
+        }
+        
+        code { font-family: inherit; }
+
+        /* Syntax Highlighting Colors */
+        .token-comment { color: #6a9955; }
+        .token-keyword { color: #569cd6; font-weight: bold; }
+        .token-type { color: #dcdcaa; }
+        .token-number { color: #b5cea8; }
+        .token-punctuation { color: #d4d4d4; }
+        .token-string { color: #ce9178; }
+
+        #console-output {
+            flex: 1;
+            padding: 1rem;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            color: #ccc;
+        }
+
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #3333; padding-bottom: 2px; }
+        .log-error { color: #ff6b6b; }
+
+        @media (max-width: 768px) {
+            main { flex-direction: column; }
+            .editor-pane { height: 50%; border-right: none; border-bottom: 1px solid var(--border); }
+            .output-pane { height: 50%; }
+            header { padding: 0.5rem; }
+            h1 { font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Squared (^2) <span>Playground</span></h1>
+            <div class="controls">
+                <button id="run-btn"><i class="fas fa-play"></i> Run</button>
+                <button id="clear-btn"><i class="fas fa-trash"></i> Clear</button>
+                <button id="load-file-btn"><i class="fas fa-folder-open"></i> Load</button>
+                <input type="file" id="file-input" accept=".sq" style="display: none;">
+            </div>
+        </header>
+        
+        <main>
+            <div class="editor-pane">
+                <div class="pane-header">Code</div>
+                <div class="textarea-wrapper">
+                    <div class="editor-container">
+                        <pre aria-hidden="true"><code id="highlighting-content"></code></pre>
+                        <textarea id="code-editor" spellcheck="false" placeholder="Write your ^2 code here..."></textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="output-pane">
+                <div class="pane-header">Output</div>
+                <div id="console-output"></div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { Lexer, Parser } from './parser.js';
+        import { Interpreter } from './interpreter.js';
+        import { highlight } from './highlighter.js';
+
+        const DEFAULT_CODE = `# Squared (^2) Example
+
+# 1. Variables and Primitives
+var[a] = int[10]
+var[b] = int[20]
+print(fstr[Sum: {eval(var[a] + var[b]).result}])
+
+# 2. Random Numbers
+var[rnd] = fint[{random(int[1], int[100])}]
+print(fstr[Random Number: {rnd}])
+
+# 3. Objects
+func[createPerson()]
+    var[p] = obj[prop[name]=str[Alice], prop[age]=int[25]]
+    return p
+
+var[person] = createPerson()
+print(fstr[Person: {person.name}, Age: {person.age}])
+
+# 4. Arrays
+var[list] = a[str[Apple], str[Banana], str[Cherry]]
+print(fstr[First fruit: {var[list].val.0}])
+print(fstr[All fruits: {var[list]}])
+
+# 5. Dynamic Object
+var[dyn] = fobj[obj[prop[val]=fint[{random(int[1], int[50])}]]]
+print(fstr[Dynamic Value: {dyn.val}])
+
+# 6. Control Flow
+var[x] = int[10]
+if[var[x] > int[5]]
+    print(str[x is > 5])
+
+var[count] = int[3]
+while[var[count] > int[0]]
+    print(fstr[Countdown: {var[count]}])
+    var[count] = var[count] - int[1]
+
+for[var[i]=int[0], var[i] < int[10], var[i] = var[i] + int[1]]
+    if[var[i] == int[2]]
+        continue
+    if[var[i] == int[4]]
+        break
+    print(fstr[Loop: {var[i]}])`;
+
+        // --- UI LOGIC ---
+        const codeEditor = document.getElementById('code-editor');
+        const highlightContent = document.getElementById('highlighting-content');
+        const consoleOutput = document.getElementById('console-output');
+        const runBtn = document.getElementById('run-btn');
+        const clearBtn = document.getElementById('clear-btn');
+        const loadFileBtn = document.getElementById('load-file-btn');
+        const fileInput = document.getElementById('file-input');
+
+        function log(message, isError = false) {
+            const div = document.createElement('div');
+            div.className = isError ? 'log-entry log-error' : 'log-entry';
+            div.textContent = `> ${message}`;
+            consoleOutput.appendChild(div);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        function runCode() {
+            const code = codeEditor.value;
+            if (!code.trim()) return;
+
+            consoleOutput.innerHTML = '';
+            log('Running...', false);
+
+            try {
+                const lexer = new Lexer(code);
+                const tokens = lexer.tokenize();
+                const parser = new Parser(tokens);
+                const ast = parser.parse();
+                const interpreter = new Interpreter((msg, err) => log(msg, err));
+                interpreter.run(ast);
+                log('Finished.', false);
+            } catch (e) {
+                log(`Runtime Error: ${e.message}`, true);
+                console.error(e);
+            }
+        }
+
+        runBtn.addEventListener('click', runCode);
+
+        clearBtn.addEventListener('click', () => {
+            consoleOutput.innerHTML = '';
+        });
+
+        loadFileBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                codeEditor.value = e.target.result;
+                updateHighlight(); // Trigger update on load
+                fileInput.value = '';
+            };
+            reader.readAsText(file);
+        });
+
+        // Highlighting Logic
+        function updateHighlight() {
+            const code = codeEditor.value;
+            // Handle scrolling sync
+            // (handled by scroll event, but content size might change)
+            highlightContent.innerHTML = highlight(code);
+            // Ensure final newline creates a line in pre if needed
+            if (code.endsWith('\n')) {
+                highlightContent.innerHTML += '\n'; 
+            }
+        }
+
+        codeEditor.addEventListener('input', updateHighlight);
+        
+        codeEditor.addEventListener('scroll', () => {
+            highlightContent.parentElement.scrollTop = codeEditor.scrollTop;
+            highlightContent.parentElement.scrollLeft = codeEditor.scrollLeft;
+        });
+
+        // Initialize with default code
+        async function init() {
+            try {
+                const res = await fetch('example.sq');
+                if (res.ok) {
+                    codeEditor.value = await res.text();
+                } else {
+                    codeEditor.value = DEFAULT_CODE;
+                }
+            } catch(e) {
+                codeEditor.value = DEFAULT_CODE;
+            }
+            updateHighlight();
+        }
+        init();
+    </script>
+</body>
+</html>
