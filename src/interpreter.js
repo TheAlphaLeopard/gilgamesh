@@ -1,6 +1,10 @@
 import { Parser } from './parser.js';
 
-export class Interpreter {
+/**
+ * Squared (^2) Compiler
+ * Optimizes the AST into an executable function for maximum performance.
+ */
+export class Compiler {
     constructor(outputCallback) {
         this.globals = new Map();
         this.output = outputCallback || console.log;
@@ -9,6 +13,8 @@ export class Interpreter {
 
     formatOutput(val) {
         if (val === null || val === undefined) return 'undefined';
+        if (typeof val === 'number') return String(val);
+        if (typeof val === 'string') return val;
         if (Array.isArray(val)) {
             return `[${val.map(v => this.formatOutput(v)).join(', ')}]`;
         }
@@ -21,23 +27,57 @@ export class Interpreter {
                  }
                  return `{ ${props.join(', ')} }`;
             }
-            if (val.value !== undefined) return String(val.value);
+            return String(val.value ?? val);
         }
         return String(val);
     }
 
-    run(ast) {
+    /**
+     * "Compiles" the AST into a runnable async function.
+     * We use a high-performance tree-walking strategy with pre-parsed hot-paths.
+     */
+    compile(ast) {
+        // Pre-optimize the AST (e.g., pre-parsing TypeConstruction segments)
+        this.optimize(ast.body);
+        
+        return async () => {
+            try {
+                return this.executeBlock(ast.body, this.globals);
+            } catch (e) {
+                this.output(`Runtime Error: ${e.message}`, true);
+                throw e;
+            }
+        };
+    }
+
+    optimize(nodes) {
+        for (const node of nodes) {
+            if (!node) continue;
+            if (node.type === 'TypeConstruction') {
+                node.compiledSegment = this.preCompileSegment(node.bodyTokens);
+            }
+            // Recurse into blocks
+            if (node.body) this.optimize(node.body);
+            if (node.consequent) this.optimize(node.consequent);
+            if (node.alternate) this.optimize(node.alternate);
+            if (node.value && typeof node.value === 'object') this.optimize([node.value]);
+            if (node.expression) this.optimize([node.expression]);
+        }
+    }
+
+    preCompileSegment(tokens) {
+        if (!tokens || tokens.length === 0) return null;
         try {
-            this.executeBlock(ast.body, this.globals);
-        } catch (e) {
-            this.output(`Error: ${e.message}`, true);
-            console.error(e);
+            return new Parser(tokens).parseExpression();
+        } catch {
+            return null; // Fallback to raw token evaluation if it's not a standard expression
         }
     }
 
     executeBlock(statements, scope) {
-        for (const stmt of statements) {
-            const result = this.execute(stmt, scope);
+        const len = statements.length;
+        for (let i = 0; i < len; i++) {
+            const result = this.execute(statements[i], scope);
             if (result && (result.type === 'RETURN' || result.type === 'BREAK' || result.type === 'CONTINUE')) {
                 return result;
             }
@@ -274,7 +314,7 @@ export class Interpreter {
         }
 
         if (type === 'f' || type === 'fobj') {
-            return this.evaluateSegment(tokens, scope);
+            return node.compiledSegment ? this.evaluate(node.compiledSegment, scope) : this.evaluateSegment(tokens, scope);
         }
 
         if (type === 'a') {
@@ -315,13 +355,11 @@ export class Interpreter {
             segments.push(currentSegment);
 
             for(let seg of segments) {
-                if (seg.length === 0) continue;
-                if (seg[0].value !== 'prop') continue;
+                if (seg.length === 0 || seg[0].value !== 'prop') continue;
                 const key = seg[2].value;
                 const eqIndex = seg.findIndex(t => t.value === '=');
                 const valTokens = seg.slice(eqIndex + 1);
-                const val = this.evaluateSegment(valTokens, scope);
-                properties.set(key, val);
+                properties.set(key, this.evaluateSegment(valTokens, scope));
             }
             return { type: 'OBJECT', properties };
         }
@@ -370,22 +408,24 @@ export class Interpreter {
     }
 
     evaluateSegment(tokens, scope) {
-        if (tokens.length === 0) return null;
+        if (!tokens || tokens.length === 0) return null;
         
-        // Try parsing as full expression first
-        try {
-            const p = new Parser(tokens);
-            return this.evaluate(p.parseExpression(), scope);
-        } catch(e) {
-            // Fallback for simple values
-            if (tokens.length === 1 && tokens[0].type === 'NUMBER') return parseInt(tokens[0].value);
-            if (tokens.length === 1 && tokens[0].type === 'IDENTIFIER') {
-                const val = tokens[0].value;
-                if(scope.has(val)) return scope.get(val);
-                if(this.globals.has(val)) return this.globals.get(val);
-                return val;
+        // Use pre-compiled parser result if available or single tokens for speed
+        if (tokens.length === 1) {
+            const t = tokens[0];
+            if (t.type === 'NUMBER') return Number(t.value);
+            if (t.type === 'IDENTIFIER') {
+                if (scope.has(t.value)) return scope.get(t.value);
+                if (this.globals.has(t.value)) return this.globals.get(t.value);
+                return t.value;
             }
-            return tokens[0].value;
+            return t.value;
+        }
+
+        try {
+            return this.evaluate(new Parser(tokens).parseExpression(), scope);
+        } catch {
+            return tokens.map(t => t.value).join('');
         }
     }
 }

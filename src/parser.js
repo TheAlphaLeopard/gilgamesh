@@ -4,87 +4,62 @@ export class Lexer {
         this.pos = 0;
         this.tokens = [];
         this.currentIndent = 0;
+        // Pre-compile the regex for speed
+        this.tokenRegex = /#.*|\n|[ \t]+|[a-zA-Z_][a-zA-Z0-9_]*|[0-9]+(?:\.[0-9]+)?|==|!=|<=|>=|[=,.\+\-\*\/\(\)\{\}\<\>\!\[\]]/g;
     }
 
     tokenize() {
-        while (this.pos < this.input.length) {
-            let char = this.input[this.pos];
-
-            if (char === '\n') {
-                this.tokens.push({ type: 'NEWLINE', line: this.getLine() });
-                this.pos++;
+        let match;
+        this.handleIndentation();
+        while ((match = this.tokenRegex.exec(this.input)) !== null) {
+            const val = match[0];
+            
+            if (val === '\n') {
+                this.tokens.push({ type: 'NEWLINE' });
                 this.handleIndentation();
                 continue;
             }
+            if (val.startsWith('#') || /^[ \t]+$/.test(val)) continue;
 
-            if (/\s/.test(char)) {
-                this.pos++;
-                continue;
-            }
-
-            if (char === '#') {
-                this.skipComment();
-                continue;
-            }
-
-            if (['=', ',', '.', '+', '-', '*', '/', '(', ')', '{', '}', '<', '>', '!'].includes(char)) {
-                const next = this.input[this.pos + 1];
-                if (char === '=' && next === '=') { this.tokens.push({type:'SYMBOL', value:'=='}); this.pos+=2; continue; }
-                if (char === '!' && next === '=') { this.tokens.push({type:'SYMBOL', value:'!='}); this.pos+=2; continue; }
-                if (char === '<' && next === '=') { this.tokens.push({type:'SYMBOL', value:'<='}); this.pos+=2; continue; }
-                if (char === '>' && next === '=') { this.tokens.push({type:'SYMBOL', value:'>='}); this.pos+=2; continue; }
-
-                this.tokens.push({ type: 'SYMBOL', value: char });
-                this.pos++;
-                continue;
-            }
-
-            if (char === '[') {
+            if (/[a-zA-Z_]/.test(val[0])) {
+                this.tokens.push({ type: 'IDENTIFIER', value: val });
+            } else if (/[0-9]/.test(val[0])) {
+                this.tokens.push({ type: 'NUMBER', value: val });
+            } else if (val === '[') {
                 this.tokens.push({ type: 'LBRACKET', value: '[' });
-                this.pos++;
-                continue;
-            }
-            if (char === ']') {
+            } else if (val === ']') {
                 this.tokens.push({ type: 'RBRACKET', value: ']' });
-                this.pos++;
-                continue;
+            } else {
+                this.tokens.push({ type: 'SYMBOL', value: val });
             }
-
-            if (/[a-zA-Z_]/.test(char)) {
-                let ident = this.readIdentifier();
-                this.tokens.push({ type: 'IDENTIFIER', value: ident });
-                continue;
-            }
-
-            if (/[0-9]/.test(char)) {
-                let num = this.readNumber();
-                this.tokens.push({ type: 'NUMBER', value: num });
-                continue;
-            }
-
-            console.warn(`Unknown character: ${char} at ${this.pos}`);
-            this.pos++;
         }
 
         while (this.currentIndent > 0) {
             this.tokens.push({ type: 'DEDENT' });
             this.currentIndent -= 4;
         }
-
         return this.tokens;
     }
 
     handleIndentation() {
         let spaces = 0;
-        while (this.pos < this.input.length && this.input[this.pos] !== '\n') {
-            if (this.input[this.pos] === ' ') spaces++;
-            else if (this.input[this.pos] === '\t') spaces += 4;
+        const start = this.tokenRegex.lastIndex;
+        let p = start;
+        while (p < this.input.length) {
+            const c = this.input[p];
+            if (c === ' ') spaces++;
+            else if (c === '\t') spaces += 4;
             else break;
-            this.pos++;
+            p++;
         }
-        if (this.pos >= this.input.length || this.input[this.pos] === '\n' || this.input[this.pos] === '#') {
+        
+        if (p < this.input.length && (this.input[p] === '\n' || this.input[p] === '#')) {
+            this.tokenRegex.lastIndex = p;
             return;
         }
+
+        this.tokenRegex.lastIndex = p;
+
         if (spaces > this.currentIndent) {
             this.tokens.push({ type: 'INDENT', count: spaces - this.currentIndent });
             this.currentIndent = spaces;
@@ -96,34 +71,6 @@ export class Lexer {
             }
             this.currentIndent = spaces;
         }
-    }
-
-    skipComment() {
-        while (this.pos < this.input.length && this.input[this.pos] !== '\n') {
-            this.pos++;
-        }
-    }
-
-    readIdentifier() {
-        let res = '';
-        while (this.pos < this.input.length && /[a-zA-Z0-9_]/.test(this.input[this.pos])) {
-            res += this.input[this.pos];
-            this.pos++;
-        }
-        return res;
-    }
-
-    readNumber() {
-        let res = '';
-        while (this.pos < this.input.length && /[0-9.]/.test(this.input[this.pos])) {
-            res += this.input[this.pos];
-            this.pos++;
-        }
-        return res;
-    }
-
-    getLine() {
-        return this.input.substring(0, this.pos).split('\n').length;
     }
 }
 

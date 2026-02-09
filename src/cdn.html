@@ -28,12 +28,7 @@
             overflow: hidden;
         }
 
-        .container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            width: 100%;
-        }
+        .container { display: flex; flex-direction: column; height: 100%; width: 100%; }
 
         header {
             padding: 0.8rem 1rem;
@@ -63,25 +58,12 @@
             gap: 6px;
         }
 
-        button#run-btn {
-            background-color: #FFB74D;
-            color: #fff;
-            border: 1px solid rgba(240,246,252,0.1);
-            font-weight: bold;
-        }
-        button#run-btn:hover { background-color: #ffbf64; }
+        button#run-btn { background-color: var(--accent); color: #121212; border: none; font-weight: bold; }
         button#run-btn:hover { filter: brightness(1.1); }
 
         main { flex: 1; display: flex; overflow: hidden; }
 
-        .editor-pane, .output-pane {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            border-right: 1px solid var(--border);
-            min-width: 0;
-        }
-
+        .pane { flex: 1; display: flex; flex-direction: column; border-right: 1px solid var(--border); min-width: 0; }
         .output-pane { border-right: none; background-color: var(--console-bg); }
 
         .pane-header {
@@ -94,56 +76,19 @@
             border-bottom: 1px solid var(--border);
         }
 
-        .textarea-wrapper { 
-            flex: 1; 
-            position: relative; 
-            background-color: var(--code-bg); 
-            overflow: hidden; 
-        }
-
-        .editor-container {
-            display: grid;
-            width: 100%;
-            height: 100%;
-        }
-
-        textarea, pre {
-            grid-area: 1 / 1 / 2 / 2;
-            margin: 0;
+        #code-editor {
+            flex: 1;
             padding: 16px;
-            border: none;
             font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
             font-size: 14px;
             line-height: 20px;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            box-sizing: border-box;
-            background: transparent;
-            overflow-y: auto;
-            overflow-x: hidden;
-            tab-size: 4;
-            -webkit-font-smoothing: subpixel-antialiased;
-        }
-
-        textarea {
-            color: transparent;
-            caret-color: #58a6ff;
-            z-index: 1;
-            resize: none;
-            outline: none;
-            -webkit-text-fill-color: transparent;
-        }
-
-        pre {
-            z-index: 0;
-            pointer-events: none;
+            background-color: var(--code-bg);
             color: #c9d1d9;
-        }
-        
-        code { 
-            font-family: inherit; 
-            font-size: inherit;
-            line-height: inherit;
+            white-space: pre;
+            overflow: auto;
+            outline: none;
+            tab-size: 4;
+            caret-color: #58a6ff;
         }
 
         .token-comment { color: #6A9955; font-style: italic; }
@@ -151,7 +96,7 @@
         .token-type { color: #4FC3F7; }
         .token-builtin { color: #9CDCFE; }
         .token-number { color: #CE9178; }
-        .token-punctuation { color: #D4D4D4; opacity: 0.9; }
+        .token-punctuation { color: #D4D4D4; }
         .token-string { color: #CE9178; }
 
         #console-output {
@@ -169,10 +114,7 @@
 
         @media (max-width: 768px) {
             main { flex-direction: column; }
-            .editor-pane { height: 50%; border-right: none; border-bottom: 1px solid var(--border); }
-            .output-pane { height: 50%; }
-            header { padding: 0.5rem; }
-            h1 { font-size: 1rem; }
+            .pane { height: 50%; border-right: none; border-bottom: 1px solid var(--border); }
         }
     </style>
 </head>
@@ -189,14 +131,9 @@
         </header>
         
         <main>
-            <div class="editor-pane">
+            <div class="pane">
                 <div class="pane-header">Code</div>
-                <div class="textarea-wrapper">
-                    <div class="editor-container">
-                        <pre aria-hidden="true"><code id="highlighting-content"></code></pre>
-                        <textarea id="code-editor" spellcheck="false" placeholder="Write your ^2 code here..."></textarea>
-                    </div>
-                </div>
+                <pre id="code-editor" contenteditable="plaintext-only" spellcheck="false"></pre>
             </div>
             
             <div class="output-pane">
@@ -208,62 +145,87 @@
 
     <script type="module">
         import { Lexer, Parser } from 'https://cdn.jsdelivr.net/gh/TheAlphaLeopard/squared-lang@main/src/parser.js';
-        import { Interpreter } from 'https://cdn.jsdelivr.net/gh/TheAlphaLeopard/squared-lang@main/src/interpreter.js';
-        import { highlight } from 'https://cdn.jsdelivr.net/gh/TheAlphaLeopard/squared-lang@main/src/highlighter.js';
+        import { Compiler } from 'https://cdn.jsdelivr.net/gh/TheAlphaLeopard/squared-lang@main/src/interpreter.js';
 
-        const DEFAULT_CODE = `# Squared (^2) Example
-
-# 1. Variables and Primitives
-var[a] = int[10]
-var[b] = int[20]
-print(fstr[Sum: {eval(var[a] + var[b]).result}])
-
-# 2. Random Numbers
-var[rnd] = fint[{random(int[1], int[100])}]
-print(fstr[Random Number: {rnd}])
-
-# 3. Objects
-func[createPerson()]
-    var[p] = obj[prop[name]=str[Alice], prop[age]=int[25]]
-    return p
-
-var[person] = createPerson()
-print(fstr[Person: {person.name}, Age: {person.age}])
-
-# 4. Arrays
-var[list] = a[str[Apple], str[Banana], str[Cherry]]
-print(fstr[First fruit: {var[list].val.0}])
-print(fstr[All fruits: {var[list]}])
-
-# 5. Dynamic Object
-var[dyn] = fobj[obj[prop[val]=fint[{random(int[1], int[50])}]]]
-print(fstr[Dynamic Value: {dyn.val}])
-
-# 6. Control Flow
-var[x] = int[10]
-if[var[x] > int[5]]
-    print(str[x is > 5])
-
-var[count] = int[3]
-while[var[count] > int[0]]
-    print(fstr[Countdown: {var[count]}])
-    var[count] = var[count] - int[1]
-
-for[var[i]=int[0], var[i] < int[10], var[i] = var[i] + int[1]]
-    if[var[i] == int[2]]
-        continue
-    if[var[i] == int[4]]
-        break
-    print(fstr[Loop: {var[i]}])`;
-
-        
-        const codeEditor = document.getElementById('code-editor');
-        const highlightContent = document.getElementById('highlighting-content');
+        const editor = document.getElementById('code-editor');
         const consoleOutput = document.getElementById('console-output');
         const runBtn = document.getElementById('run-btn');
         const clearBtn = document.getElementById('clear-btn');
         const loadFileBtn = document.getElementById('load-file-btn');
         const fileInput = document.getElementById('file-input');
+
+        const rules = [
+            { r: /(#.*)/g, c: 'token-comment' },
+            { r: /\b(var|func|return|if|else|while|for|break|continue)\b/g, c: 'token-keyword' },
+            { r: /\b(int|str|bool|obj|prop|a|f)\b/g, c: 'token-type' },
+            { r: /\b(print|random|eval|fstr|fint|fobj|val|e\d+)\b/g, c: 'token-builtin' },
+            { r: /(\d+)/g, c: 'token-number' },
+            { r: /([[\]{}()=.,+\-*/<>!])/g, c: 'token-punctuation' }
+        ];
+
+        function highlight(code) {
+            let html = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const combined = new RegExp(rules.map(x => `(${x.r.source})`).join('|'), 'g');
+            return html.replace(combined, (m, ...args) => {
+                const idx = args.findIndex((v, i) => i < rules.length && v !== undefined);
+                return idx !== -1 ? `<span class="${rules[idx].c}">${m}</span>` : m;
+            });
+        }
+
+        function update() {
+            const cursor = getCursorPosition(editor);
+            const text = editor.innerText;
+            editor.innerHTML = highlight(text);
+            setCursorPosition(editor, cursor);
+        }
+
+        function getCursorPosition(el) {
+            const sel = window.getSelection();
+            if (!sel.rangeCount) return 0;
+            const range = sel.getRangeAt(0);
+            const preCaretRange = range.cloneRange();
+            preCaretRange.selectNodeContents(el);
+            preCaretRange.setEnd(range.endContainer, range.endOffset);
+            return preCaretRange.toString().length;
+        }
+
+        function setCursorPosition(el, pos) {
+            const sel = window.getSelection();
+            const range = document.createRange();
+            let charCount = 0;
+            const nodeStack = [el];
+            while (nodeStack.length > 0) {
+                const node = nodeStack.pop();
+                if (node.nodeType === 3) {
+                    const nextCharCount = charCount + node.length;
+                    if (pos >= charCount && pos <= nextCharCount) {
+                        range.setStart(node, pos - charCount);
+                        range.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                        return;
+                    }
+                    charCount = nextCharCount;
+                } else {
+                    for (let i = node.childNodes.length - 1; i >= 0; i--) {
+                        nodeStack.push(node.childNodes[i]);
+                    }
+                }
+            }
+        }
+
+        editor.addEventListener('input', update);
+        
+        editor.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const pos = getCursorPosition(editor);
+                const text = editor.innerText;
+                editor.innerText = text.slice(0, pos) + '    ' + text.slice(pos);
+                update();
+                setCursorPosition(editor, pos + 4);
+            }
+        });
 
         function log(message, isError = false) {
             const div = document.createElement('div');
@@ -273,81 +235,48 @@ for[var[i]=int[0], var[i] < int[10], var[i] = var[i] + int[1]]
             consoleOutput.scrollTop = consoleOutput.scrollHeight;
         }
 
-        function runCode() {
-            const code = codeEditor.value;
+        runBtn.onclick = async () => {
+            const code = editor.innerText;
             if (!code.trim()) return;
-
             consoleOutput.innerHTML = '';
-            log('Running...', false);
-
+            log('Compiling & Running...');
+            const startTime = performance.now();
             try {
-                const lexer = new Lexer(code);
-                const tokens = lexer.tokenize();
-                const parser = new Parser(tokens);
-                const ast = parser.parse();
-                const interpreter = new Interpreter((msg, err) => log(msg, err));
-                interpreter.run(ast);
-                log('Finished.', false);
+                const tokens = new Lexer(code).tokenize();
+                const ast = new Parser(tokens).parse();
+                const executable = new Compiler((m, e) => log(m, e)).compile(ast);
+                await executable();
+                const duration = (performance.now() - startTime).toFixed(2);
+                log(`Finished in ${duration}ms.`);
             } catch (e) {
                 log(`Runtime Error: ${e.message}`, true);
                 console.error(e);
             }
-        }
+        };
 
-        runBtn.addEventListener('click', runCode);
-
-        clearBtn.addEventListener('click', () => {
-            consoleOutput.innerHTML = '';
-        });
-
-        loadFileBtn.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        fileInput.addEventListener('change', (e) => {
+        clearBtn.onclick = () => consoleOutput.innerHTML = '';
+        loadFileBtn.onclick = () => fileInput.click();
+        fileInput.onchange = (e) => {
             const file = e.target.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = (e) => {
-                codeEditor.value = e.target.result;
-                updateHighlight(); 
+            reader.onload = (ev) => {
+                editor.innerText = ev.target.result;
+                update();
                 fileInput.value = '';
             };
             reader.readAsText(file);
-        });
+        };
 
-        function updateHighlight() {
-            const code = codeEditor.value;
-            
-            highlightContent.innerHTML = highlight(code);
-            
-            if (code.endsWith('\n')) {
-                highlightContent.innerHTML += '\n'; 
-            }
-        }
-
-        codeEditor.addEventListener('input', updateHighlight);
-        
-        codeEditor.addEventListener('scroll', () => {
-            highlightContent.parentElement.scrollTop = codeEditor.scrollTop;
-            highlightContent.parentElement.scrollLeft = codeEditor.scrollLeft;
-        });
-
-        
-        async function init() {
+        (async () => {
             try {
                 const res = await fetch('https://cdn.jsdelivr.net/gh/TheAlphaLeopard/squared-lang@main/src/example.sq');
-                if (res.ok) {
-                    codeEditor.value = await res.text();
-                } else {
-                    codeEditor.value = DEFAULT_CODE;
-                }
-            } catch(e) {
-                codeEditor.value = DEFAULT_CODE;
+                editor.innerText = res.ok ? await res.text() : '# Start coding...';
+            } catch {
+                editor.innerText = '# Start coding...';
             }
-            updateHighlight();
-        }
-        init();
+            update();
+        })();
     </script>
 </body>
 </html>
