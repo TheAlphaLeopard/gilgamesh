@@ -75,8 +75,8 @@
     <input type="file" id="mod-in" style="display:none">
 
     <script type="module">
-        import { Lexer, Parser } from 'https://cdn.jsdelivr.net/gh/TheAlphaLeopard/squared-lang@main/src/parser.js';
-        import { Interpreter } from 'https://cdn.jsdelivr.net/gh/TheAlphaLeopard/squared-lang@main/src/interpreter.js';
+        import { Lexer, Parser } from 'https://cdn.jsdelivr.net/gh/TheAlphaLeopard/gilgamesh@main/src/parser.js';
+        import { Interpreter } from 'https://cdn.jsdelivr.net/gh/TheAlphaLeopard/gilgamesh@main/src/interpreter.js';
 
         const editor = document.getElementById('code-editor');
         const consoleOut = document.getElementById('console-output');
@@ -266,10 +266,10 @@
 
         (async () => {
             try {
-                const res1 = await fetch('example.sq');
+                const res1 = await fetch('https://cdn.jsdelivr.net/gh/TheAlphaLeopard/gilgamesh@main/src/example.sq');
                 if (res1.ok) files[0].content = await res1.text();
                 
-                const res2 = await fetch('random.sq');
+                const res2 = await fetch('https://cdn.jsdelivr.net/gh/TheAlphaLeopard/gilgamesh@main/src/random.sq');
                 if (res2.ok) files[1].content = await res2.text();
             } catch {}
             loadActive();
