@@ -1,28 +1,68 @@
-# sqrd Playground - Fast & Lean
+-- example.sq - Main Entry Point
 
-# Basic variable and math
-var[x] = int[10]
-var[y] = int[20]
-var[sum] = var[x] + var[y]
+test = True
 
-print(fstr[The sum of {var[x]} and {var[y]} is {var[sum]}])
+function ohio(msg)
+    if test == True
+        print("Success:", msg)
+    else
+        print("Failure:", msg)
 
-# Simple function
-func[greet(var[name])]
-    return fstr[Hello, {var[name]}! Welcome to Squared.]
+ohio("System Online")
 
-print(greet(str[User]))
+-- Basic math and strict types
+x = !10!
+y = !20!
+sum = x + y
+print("The sum of", x, "and", y, "is", sum)
 
-# Array and Object-like structures
-var[colors] = a[str[Red], str[Green], str[Blue]]
-print(fstr[First color: {var[colors].0}])
+-- Objects & Inheritance
+#player# = [
+    name = "John"
+    health = !120!
+]
 
-# Logic
-if[var[sum] > int[15]]
-    print(str[The sum is greater than 15])
+saiyan #player# = [
+    health += !1000!
+    strength = !9001!
+]
+
+print("Saiyan Stats:")
+print("- Name:", #saiyan#.name)
+print("- Health:", #saiyan#.health)
+print("- Power Level:", #saiyan#.strength)
+
+-- Loops
+count = !3!
+while count > !0!
+    print("Countdown:", count)
+    count -= !1!
+
+-- Dynamic Evaluation
+math_val = eval("!5! * !5!")
+print("Eval result (5*5):", math_val)
+
+-- Array Access and Randomness
+fruits = ["Apple", "Banana", "Cherry", "Date", "Elderberry"]
+print("First fruit:", fruits.0)
+
+-- New Math Support
+score = !100!
+score *= !2!
+score /= !4!
+print("Calculated Score (100*2/4):", score)
+
+-- Input and Eval Support
+user_name = input("Enter your name:")
+print("Hello,", user_name)
+
+code_to_run = "!10! * !10!"
+print("Evaluating", code_to_run, "=", eval(code_to_run))
+
+-- Cross-file persistence test
+if random_file_loaded == True
+    print("Cross-file roll was:", current_roll)
+    picked = random(fruits.0, fruits.4)
+    print("Randomly picked fruit:", picked)
 else
-    print(str[The sum is small])
-
-# f[...] type for direct code evaluation
-var[calc] = f[int[5] * int[5]]
-print(fstr[Result of f-type code: {var[calc]}])
+    print("Note: Run random.sq to initialize global state.")

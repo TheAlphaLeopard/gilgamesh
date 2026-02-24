@@ -1,25 +1,33 @@
 /**
  * Squared (^2) Random Module
- * All randomness logic lives here.
+ * A single-function export for range selection or array picking.
  */
 
 /**
  * Squared (^2) Random Module
- * Robust header: Squared Module 1.0
+ * Supports range selection random(!1!, !10!) or array picking random(fruits).
  */
 
-export const random = (min, max) => {
-    const nMin = Number(min) || 0;
-    const nMax = Number(max) || 0;
-    return Math.floor(Math.random() * (nMax - nMin + 1)) + nMin;
-};
-
-export const pick = (arr) => {
-    if (!Array.isArray(arr)) return arr;
-    return arr[Math.floor(Math.random() * arr.length)];
-};
-
-export default {
-    random,
-    pick
-};
+export default function random(a, b) {
+    // Array picking: random(fruits)
+    if (Array.isArray(a) && b === undefined) {
+        if (a.length === 0) return null;
+        return a[Math.floor(Math.random() * a.length)];
+    }
+    
+    // If range is provided (even if they are array elements)
+    const min = Number(a);
+    const max = Number(b);
+    
+    // If both are numbers, return random in range
+    if (!isNaN(min) && !isNaN(max)) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+    
+    // Fallback: if two values are provided but aren't numbers, pick one of the two
+    if (b !== undefined) {
+        return Math.random() > 0.5 ? a : b;
+    }
+    
+    return a;
+}

@@ -3,281 +3,277 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Squared (^2) Language</title>
+    <title>sqrd (^2) IDE</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root {
-            --bg-dark: #1a1a1a;
-            --bg-darker: #0d0d0d;
-            --accent: #FFB74D; 
-            --text: #e0e0e0;
-            --border: #222;
-            --code-bg: #141414;
-            --console-bg: #000;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: var(--bg-darker); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        .container { display: flex; flex-direction: column; height: 100%; width: 100%; }
-        header { padding: 0.5rem 1rem; background-color: var(--bg-dark); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-        h1 { font-size: 1rem; font-weight: 700; letter-spacing: -0.5px; }
-        h1 span { color: var(--accent); opacity: 0.9; }
-        .controls { display: flex; gap: 6px; }
-        button { background-color: #2a2a2a; color: #aaa; border: 1px solid #333; width: 32px; height: 32px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.1s; }
-        button#run-btn { background-color: var(--accent); color: #000; border: none; font-weight: bold; width: auto; padding: 0 12px; }
-        main { flex: 1; display: flex; overflow: hidden; }
-        .pane { flex: 1; display: flex; flex-direction: column; border-right: 1px solid var(--border); min-width: 0; }
-        .output-pane { border-right: none; background-color: var(--console-bg); position: relative; overflow: hidden; }
-        .pane-header { background-color: #1a1a1a; padding: 4px 10px; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 1.5px; color: #555; border-bottom: 1px solid var(--border); }
-        #code-editor { flex: 1; padding: 16px; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 13px; line-height: 1.6; background-color: var(--code-bg); color: #dcdcaa; white-space: pre; overflow: auto; tab-size: 4; caret-color: #fff; }
-        .token-comment { color: #6A9955; font-style: italic; }
-        .token-keyword { color: #FFB74D; font-weight: bold; } 
-        .token-type { color: #4FC3F7; }
-        .token-builtin { color: #9CDCFE; }
+        :root { --bg: #0d0d0d; --bg-ui: #161616; --accent: #FFB74D; --text: #d1d1d1; --border: #222; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        
+        .toolbar { height: 40px; background: var(--bg-ui); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 10px; justify-content: space-between; }
+        .toolbar-group { display: flex; gap: 8px; align-items: center; }
+        
+        .btn { background: #222; color: #999; border: 1px solid #333; height: 28px; padding: 0 10px; border-radius: 4px; cursor: pointer; font-size: 11px; display: flex; align-items: center; justify-content: center; transition: 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
+        .btn:hover { background: #333; color: #fff; }
+        .btn-accent { background: var(--accent); color: #000; border: none; font-weight: bold; }
+        .btn-accent:hover { background: #ffa726; color: #000; }
+
+        .main-layout { flex: 1; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; }
+        .editor-pane { display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+        .right-pane { display: grid; grid-template-rows: 1fr 1fr; }
+        
+        .tabs { display: flex; background: #111; height: 32px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+        .tab { padding: 0 15px; height: 100%; display: flex; align-items: center; font-size: 11px; cursor: pointer; border-right: 1px solid var(--border); background: #111; color: #666; position: relative; border-bottom: 2px solid transparent; }
+        .tab.active { background: var(--bg); color: var(--accent); border-bottom: 2px solid var(--accent); }
+        .tab span.close-btn { font-size: 10px; margin-left: 10px; color: #444; padding: 2px 5px; }
+        .tab span.close-btn:hover { color: #f44; }
+        
+        #code-editor { flex: 1; padding: 15px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; outline: none; white-space: pre; overflow: auto; background: var(--bg); color: #dcdcaa; tab-size: 4; line-height: 1.5; }
+        .canvas-container { background: #000; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; border-bottom: 1px solid var(--border); }
+        #sgl-canvas { max-width: 100%; max-height: 100%; }
+        .console-container { background: #050505; padding: 10px; font-family: 'Consolas', monospace; font-size: 12px; overflow-y: auto; color: #eee; position: relative; }
+        .log-error { color: #ff5252; }
+        
+        #input-container { position: absolute; bottom: 0; left: 0; right: 0; background: #000; padding: 5px; border-top: 1px solid #333; display: none; }
+        #input-field { width: 100%; background: #111; border: 1px solid #222; color: #fff; padding: 5px; font-size: 12px; outline: none; }
+        
+        .token-comment { color: #6A9955; }
+        .token-keyword { color: #FFB74D; } 
         .token-number { color: #CE9178; }
-        .token-punctuation { color: #D4D4D4; }
         .token-string { color: #CE9178; }
-        #console-output { position: absolute; top: 0; left: 0; right: 0; bottom: 0; padding: 10px; font-family: 'Consolas', monospace; font-size: 12px; overflow-y: auto; white-space: pre-wrap; color: #fff; z-index: 2; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
-        .log-entry { margin-bottom: 2px; }
-        .log-error { color: #ff5555; font-weight: bold; }
-        #input-container { position: absolute; bottom: 0; left: 0; right: 0; padding: 10px; background: rgba(0,0,0,0.9); border-top: 1px solid #222; display: none; z-index: 10; }
-        #input-field { width: 100%; background: #000; color: #fff; border: 1px solid #333; padding: 8px; font-family: inherit; }
-        @media (max-width: 768px) { main { flex-direction: column; } .pane { height: 50%; border-right: none; border-bottom: 1px solid var(--border); } }
+        .token-type { color: #4FC3F7; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>sqrd <span>Playground</span></h1>
-            <div class="controls">
-                <button id="run-btn" title="Run">RUN</button>
-                <button id="clear-btn" title="Clear Output"><i class="fas fa-trash"></i></button>
-                <button id="io-btn" title="Load/Export"><i class="fas fa-folder-open"></i></button>
-                <button id="add-mod-btn" title="Import JS Module"><i class="fas fa-plus"></i></button>
-                <input type="file" id="file-input" accept=".sq" style="display: none;">
-                <input type="file" id="mod-input" accept=".js" style="display: none;">
-            </div>
-        </header>
-        <main>
-            <div class="pane">
-                <div class="pane-header">Code</div>
-                <pre id="code-editor" contenteditable="plaintext-only" spellcheck="false"></pre>
-            </div>
-            <div class="output-pane" id="output-pane">
-                <div class="pane-header" style="position:relative; z-index:5;">Output Console</div>
-                <div id="console-output"></div>
-                <div id="input-container">
-                    <input type="text" id="input-field" placeholder="Type here...">
-                </div>
-            </div>
-        </main>
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <button class="btn" id="btn-import" title="Import File">IMPORT</button>
+            <button class="btn" id="btn-export" title="Export File">EXPORT</button>
+            <button class="btn" id="btn-module" title="Add Module">MODULE</button>
+        </div>
+        <div class="toolbar-group">
+            <button class="btn btn-accent" id="btn-run">RUN</button>
+            <button class="btn" id="btn-stop">STOP</button>
+            <button class="btn" id="btn-clear">CLEAR</button>
+        </div>
     </div>
+    <div class="main-layout">
+        <div class="editor-pane">
+            <div class="tabs" id="tab-list"></div>
+            <pre id="code-editor" contenteditable="plaintext-only" spellcheck="false"></pre>
+        </div>
+        <div class="right-pane">
+            <div class="canvas-container" id="canvas-area">
+                <div style="color: #333; font-size: 12px; font-style: italic;">Canvas Output (Unused)</div>
+            </div>
+            <div class="console-container" id="console-output"></div>
+        </div>
+    </div>
+    <div id="input-container"><input type="text" id="input-field" placeholder="Input required..."></div>
+
+    <input type="file" id="file-in" style="display:none">
+    <input type="file" id="mod-in" style="display:none">
+
     <script type="module">
         import { Lexer, Parser } from './parser.js';
-        import { Compiler } from './interpreter.js';
-        
-        // Global registry for modules (built-in and user-provided)
-        window.__sqrdModules = new Map();
+        import { Interpreter } from './interpreter.js';
 
         const editor = document.getElementById('code-editor');
-        const consoleOutput = document.getElementById('console-output');
-        const runBtn = document.getElementById('run-btn');
-        const clearBtn = document.getElementById('clear-btn');
-        const ioBtn = document.getElementById('io-btn');
-        const addModBtn = document.getElementById('add-mod-btn');
-        const fileInput = document.getElementById('file-input');
-        const modInput = document.getElementById('mod-input');
-        const inputContainer = document.getElementById('input-container');
-        const inputField = document.getElementById('input-field');
+        const consoleOut = document.getElementById('console-output');
+        const tabList = document.getElementById('tab-list');
+        const inpCont = document.getElementById('input-container');
+        const inpField = document.getElementById('input-field');
 
-        let isRunning = false;
+        let files = [
+            { name: 'main.sq', content: '' },
+            { name: 'random.sq', content: '' }
+        ];
+        let activeIdx = 0;
+        let interpreter = null;
+        const projectScope = new Map(); // Shared global scope across all files
+        window.__sqrdModules = new Map();
 
         const rules = [
-            { r: /(#.*)/g, c: 'token-comment' },
-            { r: /\b(var|func|return|if|else|while|for|break|continue|import)\b/g, c: 'token-keyword' },
-            { r: /\b(int|str|bool|obj|prop|a|fobj)\b/g, c: 'token-type' },
-            { r: /\b(print|input|eval|fstr|fint|val|random|pick|range|e\d+)\b/g, c: 'token-builtin' },
-            { r: /(\d+)/g, c: 'token-number' },
-            { r: /([[\]{}()=.,+\-*/<>!])/g, c: 'token-punctuation' }
+            { r: /(--.*)/g, c: 'token-comment' },
+            { r: /\b(function|return|if|else|while|for|break|continue|import|eval|True|False)\b/g, c: 'token-keyword' },
+            { r: /(!-?\d+!)/g, c: 'token-number' },
+            { r: /("[^"]*")/g, c: 'token-string' },
+            { r: /(#[a-zA-Z_][a-zA-Z0-9_]*#)/g, c: 'token-type' }
         ];
 
-        function highlight(code) {
-            let html = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        function highlight() {
+            const pos = getCaret(editor);
+            let html = editor.innerText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             const combined = new RegExp(rules.map(x => `(${x.r.source})`).join('|'), 'g');
-            return html.replace(combined, (m, ...args) => {
-                const idx = args.findIndex((v, i) => i < rules.length && v !== undefined);
-                return idx !== -1 ? `<span class="${rules[idx].c}">${m}</span>` : m;
+            editor.innerHTML = html.replace(combined, (m, ...args) => {
+                const i = args.findIndex((v, idx) => idx < rules.length && v !== undefined);
+                return i !== -1 ? `<span class="${rules[i].c}">${m}</span>` : m;
             });
+            setCaret(editor, pos);
+            files[activeIdx].content = editor.innerText;
         }
 
-        function update() {
-            const cursor = getCursorPosition(editor);
-            const text = editor.innerText;
-            editor.innerHTML = highlight(text);
-            setCursorPosition(editor, cursor);
-        }
-
-        function getCursorPosition(el) {
+        function getCaret(el) {
             const sel = window.getSelection();
             if (!sel.rangeCount) return 0;
             const range = sel.getRangeAt(0);
-            const preCaretRange = range.cloneRange();
-            preCaretRange.selectNodeContents(el);
-            preCaretRange.setEnd(range.endContainer, range.endOffset);
-            return preCaretRange.toString().length;
+            const pre = range.cloneRange();
+            pre.selectNodeContents(el);
+            pre.setEnd(range.endContainer, range.endOffset);
+            return pre.toString().length;
         }
 
-        function setCursorPosition(el, pos) {
+        function setCaret(el, pos) {
             const sel = window.getSelection();
             const range = document.createRange();
-            let charCount = 0;
-            const nodeStack = [el];
-            while (nodeStack.length > 0) {
-                const node = nodeStack.pop();
+            let cur = 0;
+            const stack = [el];
+            while (stack.length > 0) {
+                const node = stack.pop();
                 if (node.nodeType === 3) {
-                    const nextCharCount = charCount + node.length;
-                    if (pos >= charCount && pos <= nextCharCount) {
-                        range.setStart(node, pos - charCount);
+                    if (cur + node.length >= pos) {
+                        range.setStart(node, pos - cur);
                         range.collapse(true);
                         sel.removeAllRanges();
                         sel.addRange(range);
                         return;
                     }
-                    charCount = nextCharCount;
+                    cur += node.length;
                 } else {
-                    for (let i = node.childNodes.length - 1; i >= 0; i--) nodeStack.push(node.childNodes[i]);
+                    for (let i = node.childNodes.length - 1; i >= 0; i--) stack.push(node.childNodes[i]);
                 }
             }
         }
 
-        editor.addEventListener('input', update);
-        editor.addEventListener('keydown', (e) => {
-            const pairs = { '(': ')', '[': ']', '{': '}' };
-            if (pairs[e.key]) {
-                e.preventDefault();
-                const pos = getCursorPosition(editor);
-                const text = editor.innerText;
-                editor.innerText = text.slice(0, pos) + e.key + pairs[e.key] + text.slice(pos);
-                update();
-                setCursorPosition(editor, pos + 1);
-            } else if (e.key === 'Tab') {
-                e.preventDefault();
-                const pos = getCursorPosition(editor);
-                const text = editor.innerText;
-                editor.innerText = text.slice(0, pos) + '    ' + text.slice(pos);
-                update();
-                setCursorPosition(editor, pos + 4);
-            }
-        });
-
-        function log(message, isError = false) {
-            const div = document.createElement('div');
-            div.className = isError ? 'log-entry log-error' : 'log-entry';
-            div.textContent = message.startsWith('>') ? message : `> ${message}`;
-            consoleOutput.appendChild(div);
-            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        function renderTabs() {
+            tabList.innerHTML = '';
+            files.forEach((f, i) => {
+                const tab = document.createElement('div');
+                tab.className = `tab ${i === activeIdx ? 'active' : ''}`;
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = f.name;
+                tab.appendChild(nameSpan);
+                
+                if (files.length > 1) {
+                    const closeBtn = document.createElement('span');
+                    closeBtn.className = 'close-btn';
+                    closeBtn.textContent = '✕';
+                    closeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        files.splice(i, 1);
+                        activeIdx = Math.min(activeIdx, files.length - 1);
+                        loadActive();
+                    };
+                    tab.appendChild(closeBtn);
+                }
+                
+                tab.onclick = () => {
+                    activeIdx = i;
+                    loadActive();
+                };
+                tabList.appendChild(tab);
+            });
+            const add = document.createElement('div');
+            add.className = 'tab';
+            add.textContent = '+';
+            add.onclick = () => {
+                files.push({ name: `file${files.length}.sq`, content: '' });
+                activeIdx = files.length - 1;
+                loadActive();
+            };
+            tabList.appendChild(add);
         }
 
-        const promptInput = (msg) => {
-            if (msg) log(msg);
-            inputContainer.style.display = 'block';
-            inputField.value = '';
-            inputField.focus();
-            return new Promise(resolve => {
-                const handler = (e) => {
-                    if (e.key === 'Enter') {
-                        const val = inputField.value;
-                        log(`>> ${val}`);
-                        inputContainer.style.display = 'none';
-                        inputField.removeEventListener('keydown', handler);
-                        resolve(val);
-                    }
-                };
-                inputField.addEventListener('keydown', handler);
-            });
+        function loadActive() {
+            editor.innerText = files[activeIdx].content;
+            highlight();
+            renderTabs();
+        }
+
+        function log(m, err = false) {
+            const d = document.createElement('div');
+            d.className = err ? 'log-error' : '';
+            d.textContent = `> ${m}`;
+            consoleOut.appendChild(d);
+            consoleOut.scrollTop = consoleOut.scrollHeight;
+        }
+
+        editor.oninput = highlight;
+        editor.onkeydown = (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const pos = getCaret(editor);
+                editor.innerText = editor.innerText.slice(0, pos) + '    ' + editor.innerText.slice(pos);
+                highlight();
+                setCaret(editor, pos + 4);
+            }
         };
 
-        runBtn.onclick = async () => {
-            if (isRunning) return;
-            const code = editor.innerText;
-            if (!code.trim()) return;
-            isRunning = true;
-            consoleOutput.innerHTML = '';
-            log('JIT Compiling...');
-            
+        document.getElementById('btn-run').onclick = async () => {
+            consoleOut.innerHTML = '';
+            log(`Running ${files[activeIdx].name}...`);
             try {
-                const tokens = new Lexer(code).tokenize();
+                const tokens = new Lexer(editor.innerText).tokenize();
                 const ast = new Parser(tokens).parse();
-                const compiler = new Compiler(log, promptInput, {});
-                const { funcString, execute } = await compiler.compile(ast);
                 
-
-
-                log('Executing...');
-                const startTime = performance.now();
-                await execute();
-                const duration = (performance.now() - startTime).toFixed(2);
-                log(`Finished in ${duration}ms.`);
-            } catch (e) {
-                log(`Error: ${e.message}`, true);
-                console.error(e);
-            } finally {
-                isRunning = false;
-            }
+                // Initialize interpreter with shared projectScope if not already existing
+                if (!interpreter) {
+                    interpreter = new Interpreter(log, (m) => {
+                        log(m);
+                        inpCont.style.display = 'block';
+                        inpField.value = '';
+                        inpField.focus();
+                        return new Promise(r => {
+                            const h = (ev) => { if(ev.key==='Enter'){ inpCont.style.display='none'; inpField.removeEventListener('keydown', h); r(inpField.value); } };
+                            inpField.addEventListener('keydown', h);
+                        });
+                    }, projectScope);
+                }
+                
+                await interpreter.run(ast);
+                log('Done.');
+            } catch (e) { log(e.message, true); }
         };
 
-        clearBtn.onclick = () => consoleOutput.innerHTML = '';
-
-        ioBtn.onclick = () => {
-            if (editor.innerText.trim() === '') {
-                fileInput.click();
-            } else {
-                const blob = new Blob([editor.innerText], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'project.sq';
-                a.click();
-                URL.revokeObjectURL(url);
-            }
+        document.getElementById('btn-stop').onclick = () => { if(interpreter) interpreter.stop = true; log('Stopped.'); };
+        document.getElementById('btn-clear').onclick = () => consoleOut.innerHTML = '';
+        document.getElementById('btn-import').onclick = () => document.getElementById('file-in').click();
+        document.getElementById('btn-module').onclick = () => document.getElementById('mod-in').click();
+        document.getElementById('btn-export').onclick = () => {
+            const b = new Blob([editor.innerText], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(b);
+            a.download = files[activeIdx].name;
+            a.click();
         };
 
-        fileInput.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                editor.innerText = ev.target.result;
-                update();
-                fileInput.value = '';
+        document.getElementById('file-in').onchange = (e) => {
+            const f = e.target.files[0]; if (!f) return;
+            const r = new FileReader();
+            r.onload = (ev) => { files.push({ name: f.name, content: ev.target.result }); activeIdx = files.length - 1; loadActive(); };
+            r.readAsText(f);
+        };
+
+        document.getElementById('mod-in').onchange = (e) => {
+            const f = e.target.files[0]; if (!f) return;
+            const r = new FileReader();
+            r.onload = async (ev) => {
+                const b = new Blob([ev.target.result], { type: 'application/javascript' });
+                window.__sqrdModules.set(f.name, URL.createObjectURL(b));
+                log(`Module ${f.name} loaded.`);
             };
-            reader.readAsText(file);
-        };
-
-        addModBtn.onclick = () => modInput.click();
-        modInput.onchange = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            const reader = new FileReader();
-            reader.onload = async (ev) => {
-                const content = ev.target.result;
-                const blob = new Blob([content], { type: 'application/javascript' });
-                const url = URL.createObjectURL(blob);
-                window.__sqrdModules.set(file.name, url);
-                log(`Module registered: ${file.name}`);
-            };
-            reader.readAsText(file);
-            modInput.value = '';
+            r.readAsText(f);
         };
 
         (async () => {
             try {
-                const res = await fetch('example.sq');
-                editor.innerText = res.ok ? await res.text() : '# Start coding...';
-            } catch {
-                editor.innerText = '# Start coding...';
-            }
-            update();
+                const res1 = await fetch('example.sq');
+                if (res1.ok) files[0].content = await res1.text();
+                
+                const res2 = await fetch('random.sq');
+                if (res2.ok) files[1].content = await res2.text();
+            } catch {}
+            loadActive();
         })();
     </script>
 </body>

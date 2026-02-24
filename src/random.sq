@@ -1,0 +1,13 @@
+-- random.sq - Module Logic demonstration
+import random.js
+
+-- Set a global state variable
+dice_type = !20!
+
+-- Use the imported random module (now supports filenames with dots in import)
+current_roll = random(!1!, dice_type)
+print("Rolling D" + dice_type + "... Result:", current_roll)
+
+-- Mark as loaded for example.sq
+random_file_loaded = True
+print("Random logic initialized globally.")

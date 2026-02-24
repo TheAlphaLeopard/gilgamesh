@@ -1,132 +1,154 @@
 /**
- * Squared (^2) JIT Compiler
- * A lean, high-performance engine for the Squared Language.
+ * Squared (^2) Interpreter
+ * Executes AST directly with file-based scoping and inheritance support.
  */
-export class Compiler {
-    constructor(outputCallback, inputCallback) {
+
+export class Interpreter {
+    constructor(outputCallback, inputCallback, externalScope = null) {
         this.output = outputCallback || console.log;
         this.inputPrompt = inputCallback || (() => Promise.resolve(""));
-        this.modules = new Map();
+        this.globals = externalScope || new Map();
+        this.stop = false;
+        
+        // Built-ins (only set if not already present)
+        if (!this.globals.has('print')) {
+            this.globals.set('print', async (...args) => {
+                this.output(args.map(a => this.stringify(a)).join(' '));
+            });
+        }
+        if (!this.globals.has('input')) {
+            this.globals.set('input', async (msg) => {
+                return await this.inputPrompt(this.stringify(msg));
+            });
+        }
     }
 
-    async compile(ast) {
-        const body = await this.compileBlock(ast.body);
-        const funcString = `return (async function() {
-            const { print, input, modules, format } = __ctx;
-            ${body}
-        })();`;
-        const fn = new Function('__ctx', funcString);
-        return {
-            execute: () => fn({
-                print: (...args) => this.output(args.map(a => this.formatOutput(a)).join(' ')),
-                input: async (msg) => await this.inputPrompt(this.formatOutput(msg)),
-                modules: this.modules,
-                format: (v) => this.formatOutput(v)
-            })
-        };
+    async run(ast) {
+        this.stop = false;
+        // Use the global scope directly to allow cross-file persistence
+        return await this.executeBlock(ast.body, this.globals);
     }
 
-    async compileBlock(statements) {
-        let js = '';
-        for (const stmt of statements) js += await this.compileStatement(stmt);
-        return js;
+    async executeBlock(statements, scope) {
+        let lastResult = null;
+        for (const stmt of statements) {
+            if (this.stop) return null;
+            lastResult = await this.executeStatement(stmt, scope);
+            if (scope.has('__return_value__')) return scope.get('__return_value__');
+        }
+        return lastResult;
     }
 
-    async compileStatement(node) {
+    async executeStatement(node, scope) {
+        if (this.stop) return null;
         switch (node.type) {
             case 'ImportStatement':
                 const url = window.__sqrdModules?.get(node.moduleName) || `./${node.moduleName}`;
                 const mod = await import(url);
-                const obj = mod.default || mod;
-                this.modules.set(node.moduleName, obj);
-                let mJs = `var ${node.moduleName.split('.')[0]} = modules.get('${node.moduleName}');\n`;
-                if (typeof obj === 'object') {
-                    for (const k in obj) mJs += `var ${k} = ${node.moduleName.split('.')[0]}['${k}'];\n`;
-                }
-                return mJs;
-            case 'VarDeclaration': return `var ${node.name} = ${await this.compileExpression(node.value)};\n`;
-            case 'AssignmentStatement': return `${node.name} = ${await this.compileExpression(node.value)};\n`;
+                scope.set(node.moduleName.split('.')[0], mod.default || mod);
+                break;
             case 'FunctionDeclaration':
-                return `var ${node.name} = async (${node.params.join(', ')}) => {\n${await this.compileBlock(node.body)}\n};\n`;
+                scope.set(node.name, async (...args) => {
+                    const localScope = new Map(scope);
+                    node.params.forEach((p, i) => localScope.set(p, args[i]));
+                    const res = await this.executeBlock(node.body, localScope);
+                    localScope.delete('__return_value__');
+                    return res;
+                });
+                break;
+            case 'ObjectDefinition':
+                let obj = node.parent && typeof scope.get(node.parent) === 'object' ? { ...scope.get(node.parent) } : {};
+                const objScope = new Map(Object.entries(obj));
+                await this.executeBlock(node.properties, objScope);
+                scope.set(node.name, Object.fromEntries(objScope));
+                break;
+            case 'Assignment':
+                const val = await this.evaluateExpression(node.value, scope);
+                const target = scope.has(node.name) ? scope : this.globals;
+                const cur = target.get(node.name) || 0;
+                const ops = { 
+                    '=': v => v, '+=': v => cur + v, '-=': v => cur - v, 
+                    '*=': v => cur * v, '/=': v => cur / v 
+                };
+                target.set(node.name, ops[node.operator](val));
+                break;
             case 'IfStatement':
-                let ifJs = `if (${await this.compileExpression(node.test)}) {\n${await this.compileBlock(node.consequent)}}\n`;
-                if (node.alternate) ifJs += `else {\n${await this.compileBlock(node.alternate)}}\n`;
-                return ifJs;
-            case 'WhileStatement': return `while (${await this.compileExpression(node.test)}) {\n${await this.compileBlock(node.body)}}\n`;
-            case 'ReturnStatement': return `return ${node.value ? await this.compileExpression(node.value) : 'null'};\n`;
-            case 'BreakStatement': return 'break;\n';
-            case 'ContinueStatement': return 'continue;\n';
-            case 'ExpressionStatement': return `${await this.compileExpression(node.expression)};\n`;
-            default: return '';
+                if (await this.evaluateExpression(node.test, scope)) return await this.executeBlock(node.consequent, scope);
+                if (node.alternate) return await this.executeBlock(node.alternate, scope);
+                break;
+            case 'WhileStatement':
+                let iters = 0;
+                while (!this.stop && await this.evaluateExpression(node.test, scope)) {
+                    const res = await this.executeBlock(node.body, scope);
+                    if (scope.has('__return_value__')) return res;
+                    if (++iters % 100 === 0) await new Promise(r => setTimeout(r, 0));
+                }
+                break;
+            case 'ReturnStatement': {
+                const val = await this.evaluateExpression(node.value, scope);
+                scope.set('__return_value__', val);
+                return val;
+            }
+            case 'ExpressionStatement':
+                return await this.evaluateExpression(node.expression, scope);
         }
     }
 
-    async compileExpression(node) {
-        if (!node) return 'null';
+    async evaluateExpression(node, scope) {
+        if (!node) return null;
         switch (node.type) {
-            case 'Literal': return JSON.stringify(node.value);
-            case 'Identifier': return node.value;
-            case 'BinaryExpression': return `(${await this.compileExpression(node.left)} ${node.operator} ${await this.compileExpression(node.right)})`;
-            case 'CallExpression':
-                const callee = await this.compileExpression(node.callee);
-                const args = await Promise.all(node.arguments.map(a => this.compileExpression(a)));
-                if (callee === 'input') return `(await input(${args[0] || '""'}))`;
-                return `(await ${callee}(${args.join(', ')}))`;
-            case 'MemberExpression':
-                const obj = await this.compileExpression(node.object);
-                const prop = node.dynamic ? await this.compileExpression(node.property) : `'${node.property}'`;
-                return `(${obj}[${prop}])`;
-            case 'TypeConstruction': return await this.compileTypeConstruction(node);
-            default: return 'null';
-        }
-    }
-
-    async compileTypeConstruction(node) {
-        const { callee, bodyTokens } = node;
-        const raw = bodyTokens.map(t => t.raw || t.value).join('');
-        if (callee === 'int') return `parseInt(${JSON.stringify(raw)}, 10)`;
-        if (callee === 'str') return JSON.stringify(raw);
-        if (callee === 'bool') return `(${JSON.stringify(raw.trim().toLowerCase())} === 'true')`;
-        if (callee === 'var') return raw.trim();
-        if (callee === 'f') return await this.compileTokensAsExpr(bodyTokens);
-        if (callee === 'a') {
-            let elements = [], current = [], bal = 0;
-            for (let t of bodyTokens) {
-                if (t.value === ',' && bal === 0) { elements.push(await this.compileTokensAsExpr(current)); current = []; }
-                else { if (t.value === '[') bal++; if (t.value === ']') bal--; current.push(t); }
+            case 'Literal': return node.value;
+            case 'ArrayLiteral': return await Promise.all(node.elements.map(e => this.evaluateExpression(e, scope)));
+            case 'Identifier': {
+                if (!scope.has(node.value)) throw new Error(`Undefined variable: ${node.value}`);
+                return scope.get(node.value);
             }
-            if (current.length) elements.push(await this.compileTokensAsExpr(current));
-            return `[${(await Promise.all(elements)).join(', ')}]`;
-        }
-        if (callee === 'fstr') {
-            let js = '`', i = 0;
-            while (i < bodyTokens.length) {
-                if (bodyTokens[i].value === '{') {
-                    let exprT = [], b = 1; i++;
-                    while (i < bodyTokens.length && b > 0) {
-                        if (bodyTokens[i].value === '{') b++;
-                        if (bodyTokens[i].value === '}') { b--; if (b === 0) break; }
-                        exprT.push(bodyTokens[i]); i++;
-                    }
-                    js += '${format(' + await this.compileTokensAsExpr(exprT) + ')}';
-                } else js += (bodyTokens[i].raw || bodyTokens[i].value).replace(/`/g, '\\`').replace(/\$/g, '\\$');
-                i++;
+            case 'BinaryExpression': {
+                const left = await this.evaluateExpression(node.left, scope);
+                const right = await this.evaluateExpression(node.right, scope);
+                switch (node.operator) {
+                    case '+': return left + right;
+                    case '-': return left - right;
+                    case '*': return left * right;
+                    case '/': return left / right;
+                    case '==': return left == right;
+                    case '!=': return left != right;
+                    case '>': return left > right;
+                    case '<': return left < right;
+                    case '>=': return left >= right;
+                    case '<=': return left <= right;
+                }
+                return null;
             }
-            return js + '`';
+            case 'CallExpression': {
+                const callee = await this.evaluateExpression(node.callee, scope);
+                const args = await Promise.all(node.arguments.map(a => this.evaluateExpression(a, scope)));
+                if (typeof callee === 'function') return await callee(...args);
+                return null;
+            }
+            case 'MemberExpression': {
+                const obj = await this.evaluateExpression(node.object, scope);
+                if (obj && typeof obj === 'object') return obj[node.property];
+                return null;
+            }
+            case 'EvalCall': {
+                const code = await this.evaluateExpression(node.argument, scope);
+                const { Lexer, Parser } = await import('./parser.js');
+                const tokens = new Lexer(String(code)).tokenize();
+                const ast = new Parser(tokens).parse();
+                // Simple eval: run as expression if possible
+                if (ast.body.length > 0 && ast.body[0].expression) {
+                    return await this.evaluateExpression(ast.body[0].expression, scope);
+                }
+                return await this.executeBlock(ast.body, scope);
+            }
         }
-        return JSON.stringify(raw);
     }
 
-    async compileTokensAsExpr(tokens) {
-        if (!tokens.length) return 'null';
-        const { Parser, Lexer } = await import('./parser.js');
-        const code = tokens.map(t => t.raw || t.value).join('').trim();
-        return await this.compileExpression(new Parser(new Lexer(code).tokenize()).parseExpression());
-    }
-
-    formatOutput(val) {
-        if (val === null || val === undefined) return 'null';
-        if (Array.isArray(val)) return `[${val.map(v => this.formatOutput(v)).join(', ')}]`;
+    stringify(val) {
+        if (val === null) return 'null';
+        if (Array.isArray(val)) return "[" + val.map(v => this.stringify(v)).join(", ") + "]";
+        if (typeof val === 'object') return JSON.stringify(val);
         return String(val);
     }
 }
