@@ -1,0 +1,113 @@
+-- ========================================================
+-- THE ULTIMATE MESH TUTORIAL: FLAPPY MESH EDITION
+-- ========================================================
+-- This script serves as both a playable game and a 
+-- comprehensive guide to the MESH rendering engine.
+
+-- [1] MODULES
+-- Core modules are automatically linked.
+import MESH.js
+import time.js
+
+-- [2] INITIALIZATION
+-- Create a window with width, height, and title.
+MESH.InitWindow(!400!, !600!, "Flappy MESH Tutorial")
+MESH.SetTargetFPS(!60!)
+
+-- [3] GAME STATE
+-- In Gilgamesh, variables are global by default unless in a function.
+-- Numeric literals MUST be wrapped in exclamation marks: !number!
+birdY = !300!
+birdVel = !0!
+gravity = !0.4!
+jump = !-7!
+score = !0!
+highScore = !0!
+gameActive = False
+
+-- Obstacle variables
+pipeX = !450!
+pipeWidth = !60!
+pipeGap = !160!
+pipeTopHeight = !200!
+
+-- [4] FUNCTIONS
+-- Define reusable logic with the 'function' keyword.
+function ResetGame()
+    birdY = !300!
+    birdVel = !0!
+    pipeX = !450!
+    pipeTopHeight = MESH.GetRandomValue(!100!, !350!)
+    score = !0!
+    gameActive = True
+
+-- [5] THE MAIN LOOP
+-- Most MESH programs run inside a 'while True' loop.
+while True
+    -- Mandatory: Prepare the back buffer for drawing.
+    MESH.BeginDrawing()
+    
+    -- Fill the screen with a solid color.
+    MESH.ClearBackground(MESH.SKYBLUE)
+    
+    if gameActive
+        -- [INPUT]
+        -- Check for spacebar or left mouse click.
+        if MESH.IsKeyPressed(" ") or MESH.IsMouseButtonPressed(MESH.MOUSE_LEFT)
+            birdVel = jump
+        
+        -- [PHYSICS]
+        birdVel += gravity
+        birdY += birdVel
+        pipeX -= !4!
+        
+        -- [PROCEDURAL GENERATION]
+        -- Reset pipe when it leaves the screen.
+        if pipeX < !-70!
+            pipeX = !400!
+            pipeTopHeight = MESH.GetRandomValue(!80!, !320!)
+            score += !1!
+            if score > highScore
+                highScore = score
+        
+        -- [RENDERING PRIMITIVES]
+        -- Draw pipes (Rectangles: x, y, width, height, color)
+        MESH.DrawRectangle(pipeX, !0!, pipeWidth, pipeTopHeight, MESH.GREEN)
+        MESH.DrawRectangle(pipeX, pipeTopHeight + pipeGap, pipeWidth, !600!, MESH.GREEN)
+        
+        -- Draw bird (Circle: x, y, radius, color)
+        MESH.DrawCircle(!100!, birdY, !18!, MESH.YELLOW)
+        -- Add an eye for detail
+        MESH.DrawCircle(!112!, birdY - !5!, !4!, MESH.BLACK)
+        
+        -- [COLLISION DETECTION]
+        -- Collision with screen boundaries
+        if birdY > !600! or birdY < !0!
+            gameActive = False
+        
+        -- Collision with pipes using engine helper
+        -- CheckCollisionRecs(x1, y1, w1, h1, x2, y2, w2, h2)
+        -- We approximate the bird as a rectangle for simplicity
+        if MESH.CheckCollisionRecs(!82!, birdY - !15!, !36!, !30!, pipeX, !0!, pipeWidth, pipeTopHeight)
+            gameActive = False
+        
+        if MESH.CheckCollisionRecs(!82!, birdY - !15!, !36!, !30!, pipeX, pipeTopHeight + pipeGap, pipeWidth, !600!)
+            gameActive = False
+            
+    else
+        -- [UI RENDERING]
+        -- DrawText(text, x, y, fontSize, color)
+        MESH.DrawText("FLAPPY MESH", !80!, !200!, !40!, MESH.WHITE)
+        MESH.DrawText("CLICK OR SPACE TO START", !60!, !260!, !20!, MESH.RAYWHITE)
+        MESH.DrawText("HI-SCORE: " + highScore, !130!, !300!, !20!, MESH.GOLD)
+        
+        if MESH.IsKeyPressed(" ") or MESH.IsMouseButtonPressed(MESH.MOUSE_LEFT)
+            ResetGame()
+
+    -- [SYSTEM OVERLAY]
+    MESH.DrawText("Score: " + score, !10!, !10!, !25!, MESH.WHITE)
+    MESH.DrawFPS(!300!, !10!)
+    
+    -- Mandatory: Swap buffers to show your frame.
+    -- This also handles the target FPS timing.
+    MESH.EndDrawing()

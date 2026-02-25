@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MESH Online</title>
+    <style>
+        :root { --bg: #0d0d0d; --bg-ui: #161616; --accent: #FFB74D; --text: #d1d1d1; --border: #222; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        
+        .toolbar { height: 40px; background: var(--bg-ui); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 15px; justify-content: space-between; }
+        .toolbar-group { display: flex; gap: 8px; align-items: center; }
+        .logo { font-weight: 900; color: var(--accent); letter-spacing: 2px; font-size: 14px; margin-right: 20px; }
+
+        .btn { background: #222; color: #999; border: 1px solid #333; height: 28px; padding: 0 12px; border-radius: 4px; cursor: pointer; font-size: 10px; display: flex; align-items: center; justify-content: center; text-transform: uppercase; font-weight: 600; }
+        .btn-accent { background: var(--accent); color: #000; border: none; }
+
+        .main-layout { flex: 1; display: grid; grid-template-columns: 450px 1fr; overflow: hidden; }
+        
+        .editor-container { position: relative; display: flex; border-right: 1px solid var(--border); overflow: hidden; background: #0a0a0a; }
+        #line-numbers { padding: 15px 5px; text-align: right; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5; color: #333; background: #070707; border-right: 1px solid #1a1a1a; user-select: none; min-width: 40px; overflow: hidden; pointer-events: none; }
+        #code-editor { flex: 1; padding: 15px; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5; outline: none; white-space: pre; overflow: auto; background: transparent; color: #ffffff; tab-size: 4; }
+
+        .canvas-layout { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #000; }
+        .canvas-container { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+        #render-canvas { background: #000; image-rendering: pixelated; width: 100%; height: 100%; object-fit: contain; }
+        #error-console { height: 150px; background: #050505; border-top: 1px solid var(--border); font-family: 'Consolas', monospace; font-size: 12px; color: #ff5555; padding: 12px; overflow-y: auto; white-space: pre-wrap; line-height: 1.4; }
+        #error-console:empty { display: none; }
+        
+        .token-comment { color: #6A9955; }
+        .token-keyword { color: #FFB74D; font-weight: bold; } 
+        .token-number { color: #CE9178; }
+        .token-string { color: #CE9178; }
+        .token-type { color: #4FC3F7; font-weight: bold; text-shadow: 0 0 5px rgba(79, 195, 247, 0.3); }
+        .token-operator { color: #FFB74D; }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <div class="logo">MESH ONLINE</div>
+            <button class="btn" id="btn-import">IMPORT</button>
+            <button class="btn" id="btn-export">EXPORT</button>
+        </div>
+        <div class="toolbar-group">
+            <button class="btn btn-accent" id="btn-run">PLAY</button>
+            <button class="btn" id="btn-stop">STOP</button>
+        </div>
+    </div>
+    <div class="main-layout">
+        <div class="editor-container">
+            <div id="line-numbers"></div>
+            <pre id="code-editor" contenteditable="plaintext-only" spellcheck="false"></pre>
+        </div>
+        <div class="canvas-layout">
+            <div class="canvas-container">
+                <canvas id="render-canvas"></canvas>
+            </div>
+            <div id="error-console"></div>
+        </div>
+    </div>
+
+    <input type="file" id="file-in" style="display:none">
+
+    <script type="module">
+        import { Lexer, Parser } from './parser.js';
+        import { Interpreter } from './interpreter.js';
+        import { ModuleManager } from './modules.js';
+        import MESH from './MESH.js';
+        import time from './time.js';
+
+        const editor = document.getElementById('code-editor');
+        const errConsole = document.getElementById('error-console');
+        const lineNums = document.getElementById('line-numbers');
+        let interpreter = null;
+
+        // Undo/Redo System
+        let history = [];
+        let historyIdx = -1;
+
+        function saveHistory() {
+            const text = editor.innerText;
+            if (historyIdx >= 0 && history[historyIdx] === text) return;
+            history = history.slice(0, historyIdx + 1);
+            history.push(text);
+            if (history.length > 100) history.shift();
+            else historyIdx++;
+        }
+
+        function undo() {
+            if (historyIdx > 0) {
+                historyIdx--;
+                editor.innerText = history[historyIdx];
+                highlight(false); // Don't save history on undo
+            }
+        }
+
+        function redo() {
+            if (historyIdx < history.length - 1) {
+                historyIdx++;
+                editor.innerText = history[historyIdx];
+                highlight(false); // Don't save history on redo
+            }
+        }
+
+        const rules = [
+            { r: /(--.*)/g, c: 'token-comment' },
+            { r: /\b(function|return|if|else|elif|while|for|to|break|continue|import|eval|True|False|and|or)\b/g, c: 'token-keyword' },
+            { r: /(!-?\d+!)/g, c: 'token-number' },
+            { r: /("[^"]*")/g, c: 'token-string' },
+            { r: /(#[a-zA-Z_][a-zA-Z0-9_]*#)/g, c: 'token-type' },
+            { r: /([=\(\)\[\],\.+\-\*\/<>!])/g, c: 'token-operator' },
+            { r: /\b(MESH|time)\b/g, c: 'token-type' }
+        ];
+
+        let highlightTimeout;
+        function highlight(save = true) {
+            const pos = getCaret(editor);
+            let html = editor.innerText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const combined = new RegExp(rules.map(x => `(${x.r.source})`).join('|'), 'g');
+            editor.innerHTML = html.replace(combined, (m, ...args) => {
+                const i = args.findIndex((v, idx) => idx < rules.length && v !== undefined);
+                return i !== -1 ? `<span class="${rules[i].c}">${m}</span>` : m;
+            });
+            setCaret(editor, pos);
+            updateLineNumbers();
+            
+            if (save) {
+                clearTimeout(highlightTimeout);
+                highlightTimeout = setTimeout(saveHistory, 500);
+            }
+        }
+
+        function updateLineNumbers() {
+            // Use a more robust way to count lines that handles trailing newlines consistently
+            const lines = editor.innerText.split(/\n/);
+            const count = lines.length;
+            lineNums.innerHTML = Array.from({length: count}, (_, i) => i + 1).join('<br>');
+        }
+
+        function getCaret(el) {
+            const sel = window.getSelection();
+            if (!sel.rangeCount) return 0;
+            const range = sel.getRangeAt(0);
+            const pre = range.cloneRange();
+            pre.selectNodeContents(el);
+            pre.setEnd(range.endContainer, range.endOffset);
+            return pre.toString().length;
+        }
+
+        function setCaret(el, pos) {
+            const sel = window.getSelection();
+            const range = document.createRange();
+            let cur = 0;
+            const stack = [el];
+            while (stack.length > 0) {
+                const node = stack.pop();
+                if (node.nodeType === 3) {
+                    if (cur + node.length >= pos) {
+                        range.setStart(node, pos - cur);
+                        range.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                        return;
+                    }
+                    cur += node.length;
+                } else {
+                    for (let i = node.childNodes.length - 1; i >= 0; i--) stack.push(node.childNodes[i]);
+                }
+            }
+        }
+
+        editor.oninput = () => highlight(true);
+        editor.onscroll = () => { lineNums.scrollTop = editor.scrollTop; };
+        editor.onkeydown = (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'z') {
+                    e.preventDefault();
+                    if (e.shiftKey) redo(); else undo();
+                    return;
+                }
+                if (e.key === 'y') {
+                    e.preventDefault();
+                    redo();
+                    return;
+                }
+            }
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const pos = getCaret(editor);
+                editor.innerText = editor.innerText.slice(0, pos) + '    ' + editor.innerText.slice(pos);
+                highlight(true);
+                setCaret(editor, pos + 4);
+            }
+        };
+
+        function logError(msg) {
+            errConsole.innerText += (errConsole.innerText ? '\n' : '') + msg;
+            errConsole.scrollTop = errConsole.scrollHeight;
+        }
+
+        // Register built-in modules so import works without network
+        ModuleManager.registerObject('MESH.js', MESH);
+        ModuleManager.registerObject('time.js', time);
+
+        document.getElementById('btn-run').onclick = async () => {
+            errConsole.innerText = '';
+            if (interpreter) {
+                interpreter.stop = true;
+                await new Promise(r => setTimeout(r, 32));
+            }
+            try {
+                // Ensure core modules are always imported
+                let source = editor.innerText;
+                if (!source.includes('import MESH.js')) source = 'import MESH.js\n' + source;
+                if (!source.includes('import time.js')) source = 'import time.js\n' + source;
+
+                const tokens = new Lexer(source).tokenize();
+                const ast = new Parser(tokens).parse();
+                interpreter = new Interpreter(null, null, ModuleManager.globals, { Lexer, Parser, ModuleManager });
+                interpreter.run(ast).catch(e => {
+                    console.error("Runtime Error:", e);
+                    logError("Runtime Error: " + e.message);
+                });
+            } catch (e) { 
+                console.error("Parse Error:", e);
+                logError("Parse Error: " + e.message); 
+            }
+        };
+
+        document.getElementById('btn-stop').onclick = () => { if(interpreter) interpreter.stop = true; };
+        document.getElementById('btn-import').onclick = () => document.getElementById('file-in').click();
+        document.getElementById('btn-export').onclick = () => {
+            const b = new Blob([editor.innerText], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(b);
+            a.download = 'main.sq';
+            a.click();
+        };
+
+        document.getElementById('file-in').onchange = (e) => {
+            const f = e.target.files[0]; if (!f) return;
+            const r = new FileReader();
+            r.onload = (ev) => { editor.innerText = ev.target.result; highlight(); };
+            r.readAsText(f);
+        };
+
+
+
+        (async () => {
+            try {
+                const res = await fetch('example.sq');
+                if (res.ok) editor.innerText = await res.text();
+            } catch {}
+            highlight(false);
+            saveHistory();
+        })();
+    </script>
+</body>
+</html>
